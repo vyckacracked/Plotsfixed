@@ -1,0 +1,90 @@
+options:
+    plot-size: 10
+    rent-cost: 100
+    rent-duration: 24h
+    max-rent-time: 200h
+    invite-cost: 20
+
+variables:
+    {plotowners::*} = list of plot owners
+    {plotrent::%player%} = time left on rent
+
+on rightclick on sign:
+    if line 1 of event-block is "&b[Plot Manager]":
+        open chest with 3 rows named "&aPlot Management" to player
+        format slot 10 of player with paper named "&bRent Plot" with lore "&7Click to rent a plot" to close then run function rentPlot(player)
+        format slot 12 of player with emerald named "&bInvite Friend" with lore "&7Click to invite a friend" to close then run function inviteFriendGUI(player)
+        format slot 14 of player with book named "&bPlot Info" with lore "&7View your plot details" to close then run function plotInfo(player)
+
+function rentPlot(p: player):
+    if {plotowners::%p%} is set:
+        set {_currentRentTime} to {plotrent::%p%} - now
+        if {_currentRentTime} > {@max-rent-time}:
+            send "&cYou cannot extend your rent any further!" to p
+        else if p's balance is greater than or equal to {@rent-cost}:
+            remove {@rent-cost} from p's balance
+            add {@rent-duration} to {plotrent::%p%}
+            set {_totalRentTime} to {plotrent::%p%} - now
+            if {_totalRentTime} > {@max-rent-time}:
+                set {plotrent::%p%} to now + {@max-rent-time}
+                send "&aYou have reached the maximum rent time of 200 hours!" to p
+            else:
+                send "&aYou have successfully extended your plot rent!" to p
+        else:
+            send "&cYou don't have enough money to rent a plot!" to p
+    else:
+        if p's balance is greater than or equal to {@rent-cost}:
+            remove {@rent-cost} from p's balance
+            set {plotowners::%p%} to p's name
+            set {plotrent::%p%} to now + {@rent-duration}
+            send "&aYou have successfully rented a plot for 24 hours!" to p
+        else:
+            send "&cYou don't have enough money to rent a plot!" to p
+
+function inviteFriendGUI(p: player):
+    open chest with 3 rows named "&aInvite Friend" to p
+    loop all players:
+        if loop-player is not p:
+            format next slot of player with skull of loop-player named "&a%loop-player%" with lore "&7Click to invite %loop-player%" to close then run function inviteFriend(p, loop-player)
+
+function inviteFriend(p: player, target: player):
+    if {plotowners::%p%} is not set:
+        send "&cYou don't own a plot to invite friends!" to p
+    else:
+        if target is online:
+            if p's balance is greater than or equal to {@invite-cost}:
+                remove {@invite-cost} from p's balance
+                add target to {plotowners::%p%::invited::*}
+                send "&aYou have successfully invited %target% to your plot!" to p
+                send "&aYou have been invited to %p%'s plot!" to target
+            else:
+                send "&cYou don't have enough coins to invite a friend!" to p
+        else:
+            send "&cThe player %target% is not online!" to p
+
+function plotInfo(p: player):
+    if {plotowners::%p%} is not set:
+        send "&cYou don't own a plot!" to p
+    else:
+        send "&aYour Plot Info:" to p
+        send "&7Plot Size: {@plot-size}x{@plot-size}" to p
+        set {_remainingTime} to difference between {plotrent::%p%} and now
+        send "&7Time Left on Rent: %{_remainingTime}%" to p
+        send "&7Friends Invited: %size of {plotowners::%p%::invited::*}%" to p
+        send "&7Friends: %join {plotowners::%p%::invited::*} with commas%" to p
+
+on join:
+    if {plotrent::%player%} is set:
+        if {plotrent::%player%} <= now:
+            delete {plotowners::%player%}
+            delete {plotrent::%player%}
+            clear {plotowners::%player%::invited::*}
+            send "&cYour plot rent has expired!" to player
+
+command /clearplot <text>:
+    permission: op
+    trigger:
+        delete {plotowners::%arg-1%}
+        delete {plotrent::%arg-1%}
+        clear {plotowners::%arg-1%::invited::*}
+        send "&aSuccessfully cleared plot for %arg-1%."
